@@ -5,15 +5,29 @@ from .base import PrometheusMetric, QueryType
 
 # A central definition for memory usage metric
 def memory_usage_metric(namespace, pods_selector, container, cluster_label):
+    container_metrics_selector = f"""
+        pod=~"{pods_selector}", 
+        container="{container}",
+        namespace="{namespace}", 
+        __cluster__="{cluster_label}\"
+    """
+    jvm_metrics_selector = f"""
+        kubernetes_pod_name=~"{pods_selector}, 
+        component="{container}, 
+        namespace="{namespace}, 
+        __cluster__="{cluster_label}\"
+    """
     return f"""
-        max(
-            container_memory_working_set_bytes{{
-                namespace="{namespace}",
-                pod=~"{pods_selector}",
-                container="{container}"
-                {cluster_label}
-            }}
-        ) by (container, pod, job)
+        max(    
+            max(
+                max(container_memory_max_usage_bytes{{{container_metrics_selector}}}) 
+                - 
+                sum(jvm_memory_committed_bytes{{{jvm_metrics_selector}}})
+                +
+                sum(jvm_memory_used_bytes{{{jvm_metrics_selector}}})
+                )
+            )
+        )
     """
 
 
