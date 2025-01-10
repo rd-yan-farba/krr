@@ -4,7 +4,7 @@ from .base import PrometheusMetric, QueryType
 
 
 # A central definition for memory usage metric
-def memory_usage_metric(namespace, pods_selector, container, cluster_label):
+def memory_usage_metric(namespace: str, pods_selector: str, container: str, cluster_label: str):
     container_metrics_selector = f"""
         pod=~"{pods_selector}", 
         container="{container}",
@@ -54,7 +54,14 @@ class MaxMemoryLoader(PrometheusMetric):
         cluster_label = self.get_prometheus_cluster_label()
         return f"""
             max_over_time(
-                {memory_usage_metric(object.namespace, pods_selector, object.container, cluster_label)}
+                max(
+                    container_memory_working_set_bytes{{
+                        namespace="{object.namespace}",
+                        pod=~"{pods_selector}",
+                        container="{object.container}"
+                        {cluster_label}
+                    }}
+                ) by (container, pod, job)
                 [{duration}:{step}]
             )
         """
@@ -70,11 +77,17 @@ class MemoryAmountLoader(PrometheusMetric):
         cluster_label = self.get_prometheus_cluster_label()
         return f"""
             count_over_time(
-                {memory_usage_metric(object.namespace, pods_selector, object.container, cluster_label)}
+                max(
+                    container_memory_working_set_bytes{{
+                        namespace="{object.namespace}",
+                        pod=~"{pods_selector}",
+                        container="{object.container}"
+                        {cluster_label}
+                    }}
+                ) by (container, pod, job)
                 [{duration}:{step}]
             )
         """
-
 
 # TODO: Need to battle test if this one is correct.
 class MaxOOMKilledMemoryLoader(PrometheusMetric):
