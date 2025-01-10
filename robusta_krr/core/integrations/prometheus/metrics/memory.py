@@ -3,6 +3,20 @@ from robusta_krr.core.models.objects import K8sObjectData
 from .base import PrometheusMetric, QueryType
 
 
+# A central definition for memory usage metric
+def memory_usage_metric(namespace, pods_selector, container, cluster_label):
+    return f"""
+        max(
+            container_memory_working_set_bytes{{
+                namespace="{namespace}",
+                pod=~"{pods_selector}",
+                container="{container}"
+                {cluster_label}
+            }}
+        ) by (container, pod, job)
+    """
+
+
 class MemoryLoader(PrometheusMetric):
     """
     A metric loader for loading memory usage metrics.
@@ -13,16 +27,7 @@ class MemoryLoader(PrometheusMetric):
     def get_query(self, object: K8sObjectData, duration: str, step: str) -> str:
         pods_selector = "|".join(pod.name for pod in object.pods)
         cluster_label = self.get_prometheus_cluster_label()
-        return f"""
-            max(
-                container_memory_working_set_bytes{{
-                    namespace="{object.namespace}",
-                    pod=~"{pods_selector}",
-                    container="{object.container}"
-                    {cluster_label}
-                }}
-            ) by (container, pod, job)
-        """
+        return memory_usage_metric(object.namespace, pods_selector, object.container, cluster_label)
 
 
 class MaxMemoryLoader(PrometheusMetric):
@@ -35,14 +40,7 @@ class MaxMemoryLoader(PrometheusMetric):
         cluster_label = self.get_prometheus_cluster_label()
         return f"""
             max_over_time(
-                max(
-                    container_memory_working_set_bytes{{
-                        namespace="{object.namespace}",
-                        pod=~"{pods_selector}",
-                        container="{object.container}"
-                        {cluster_label}
-                    }}
-                ) by (container, pod, job)
+                {memory_usage_metric(object.namespace, pods_selector, object.container, cluster_label)}
                 [{duration}:{step}]
             )
         """
@@ -58,17 +56,11 @@ class MemoryAmountLoader(PrometheusMetric):
         cluster_label = self.get_prometheus_cluster_label()
         return f"""
             count_over_time(
-                max(
-                    container_memory_working_set_bytes{{
-                        namespace="{object.namespace}",
-                        pod=~"{pods_selector}",
-                        container="{object.container}"
-                        {cluster_label}
-                    }}
-                ) by (container, pod, job)
+                {memory_usage_metric(object.namespace, pods_selector, object.container, cluster_label)}
                 [{duration}:{step}]
             )
         """
+
 
 # TODO: Need to battle test if this one is correct.
 class MaxOOMKilledMemoryLoader(PrometheusMetric):
